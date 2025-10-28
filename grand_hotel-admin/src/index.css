@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+:root{
+--gh-red: #B40000;
+--gh-gold: #FFD700;
+--gh-black: #0D0D0D;
+--gh-pearl: #F5F5F5;
+--glass-bg: rgba(255,255,255,0.6);
+}
+
+
+/* Glassmorphism helper */
+.glass {
+background: rgba(255,255,255,0.6);
+backdrop-filter: blur(8px) saturate(120%);
+-webkit-backdrop-filter: blur(8px) saturate(120%);
+}
+
+
+/* Small utility for gradient button */
+.btn-gradient {
+background: linear-gradient(90deg, var(--gh-red), #d32f2f);
+}
+
+
+/* Ensure body background subtle */
+body{
+@apply bg-white text-dark font-sans;
+}
+
+
+/* Simple responsive container */
+.container-max{
+@apply max-w-7xl mx-auto px-4;
+}
+
+
+/* Limit hero image height */
+.hero-height{
+height: min(60vh, 720px);
+}
+
+
+/* Card image ratio */
+.card-img{
+@apply w-full h-48 object-cover rounded-lg;
+}
+
+
+/* subtle link */
+.link-underline{
+position: relative;
+}
+.link-underline::after{
+content: '';
+position: absolute;
+left: 0;
+bottom: -2px;
+height: 2px;
+width: 0;
+background: var(--gh-red);
+transition: width .25s ease;
+}
+.link-underline:hover::after{
+width: 100%;
+}
+
+
+/* small helper for section titles */
+.section-title{
+@apply text-2xl md:text-3xl font-semibold mb-4;
+}
+
+
+/* responsive grid for rooms */
