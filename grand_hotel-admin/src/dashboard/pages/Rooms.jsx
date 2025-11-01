@@ -3,7 +3,7 @@ import { Plus, Edit, Trash2, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../hooks'
 import { fetchRooms, deleteRoom } from '../../store/slices/roomsSlice'
-import ImageSlider from '../components/ImageSlider' // ← AJOUT
+import ImageSlider from '../components/ImageSlider'
 
 const Rooms = () => {
   const dispatch = useAppDispatch()
@@ -12,6 +12,11 @@ const Rooms = () => {
   useEffect(() => {
     dispatch(fetchRooms())
   }, [dispatch])
+
+  // Formatage montant F CFA
+  const formatAmountCFA = (amount) => {
+    return `${parseFloat(amount).toLocaleString('fr-FR')} FCFA`;
+  };
 
   const handleDeleteRoom = async (roomId, roomName) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer la chambre "${roomName}" ?`)) {
@@ -127,7 +132,7 @@ const Rooms = () => {
               </div>
 
               <div className="flex items-center justify-between mb-4">
-                <div className="text-2xl font-bold text-blue-600">€{room.price}</div>
+                <div className="text-2xl font-bold text-blue-600">{formatAmountCFA(room.price)}</div>
                 <div className="text-sm text-gray-500">par nuit</div>
               </div>
 
@@ -153,7 +158,7 @@ const Rooms = () => {
                   <span>Voir</span>
                 </Link>
                 <Link
-                  to={`/dashboard/room/${room._id}/edit`}
+                  to={`/dashboard/room/${room._id}/edit`} // ✅ CORRECTION DU LIEN
                   className="flex-1 bg-gray-50 text-gray-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-100 flex items-center justify-center space-x-1 transition-colors"
                 >
                   <Edit className="w-4 h-4" />

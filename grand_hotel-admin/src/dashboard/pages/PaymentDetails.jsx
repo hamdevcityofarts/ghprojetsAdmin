@@ -1,4 +1,3 @@
-// pages/PaymentDetails.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -16,7 +15,7 @@ import paymentService from '../../services/paymentService';
 import { usePayment } from '../../hooks/usePayments';
 
 const PaymentDetails = () => {
- const { id } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
   const { payment, loading, error, refetch } = usePayment(id);
   const [processing, setProcessing] = useState(false);
@@ -52,8 +51,7 @@ const PaymentDetails = () => {
     }
   };
 
-
-   const handleDownloadReceipt = async () => {
+  const handleDownloadReceipt = async () => {
     try {
       setProcessing(true);
       const blob = await paymentService.downloadReceipt(id);
@@ -71,7 +69,7 @@ const PaymentDetails = () => {
     }
   };
 
-   const getStatusIcon = (status) => {
+  const getStatusIcon = (status) => {
     switch (status) {
       case 'completed': return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'pending': return <Clock className="w-5 h-5 text-yellow-500" />;
@@ -90,6 +88,11 @@ const PaymentDetails = () => {
       case 'partially_refunded': return 'Partiellement remboursé';
       default: return status;
     }
+  };
+
+  // Formatage montant F CFA
+  const formatAmountCFA = (amount) => {
+    return `${parseFloat(amount).toLocaleString('fr-FR')} FCFA`;
   };
 
   if (loading) return (
@@ -167,7 +170,7 @@ const PaymentDetails = () => {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Montant</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  €{payment.amount}
+                  {formatAmountCFA(payment.amount)}
                 </p>
               </div>
               <div>
@@ -210,13 +213,13 @@ const PaymentDetails = () => {
                     {item.item}
                   </span>
                   <span className={item.amount < 0 ? 'text-red-600 font-medium' : 'text-gray-900 font-medium'}>
-                    {item.amount > 0 ? '+' : ''}€{Math.abs(item.amount)}
+                    {item.amount > 0 ? '+' : ''}{formatAmountCFA(Math.abs(item.amount))}
                   </span>
                 </div>
               ))}
               <div className="border-t pt-3 flex justify-between items-center font-bold text-lg">
                 <span>Total payé</span>
-                <span className="text-blue-600">€{payment.amount}</span>
+                <span className="text-blue-600">{formatAmountCFA(payment.amount)}</span>
               </div>
             </div>
           </div>

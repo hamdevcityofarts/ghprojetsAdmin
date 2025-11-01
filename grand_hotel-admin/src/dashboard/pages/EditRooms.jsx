@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, 
   Save, 
@@ -12,11 +12,11 @@ import {
   Bed
 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
-import { useAppDispatch } from '../../hooks'
-import { createRoom } from '../../store/slices/roomsSlice'
+import { useAppDispatch, useAppSelector } from '../../hooks'
+import { fetchRooms, updateRoom } from '../../store/slices/roomsSlice'
 import roomService from '../../services/roomService'
 
-// CONSTANTES (inchangées)
+// CONSTANTES (identiques à AddRoom)
 const roomTypes = [
   { value: 'standard', label: 'Chambre Standard' },
   { value: 'superior', label: 'Chambre Supérieure' },
@@ -70,11 +70,14 @@ const allAmenities = [
   { id: 'accessible', label: 'Accès handicapé', icon: '♿' }
 ]
 
-const AddRoom = () => {
+const EditRoom = () => {
+  const { id } = useParams()
   const navigate = useNavigate()
   const dispatch = useAppDispatch()
   const toast = useToast()
+  const { rooms } = useAppSelector((state) => state.rooms)
   const [loading, setLoading] = useState(false)
+  const [room, setRoom] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     number: '',
@@ -87,8 +90,45 @@ const AddRoom = () => {
     status: 'disponible',
     description: '',
     amenities: [],
-    images: []
+    images: [],
+    existingImages: []
   })
+
+  // Charger la chambre à modifier
+  useEffect(() => {
+    const loadRoom = () => {
+      const foundRoom = rooms.find(r => r._id === id)
+      if (foundRoom) {
+        setRoom(foundRoom)
+        setFormData({
+          name: foundRoom.name || '',
+          number: foundRoom.number || '',
+          type: foundRoom.type || '',
+          category: foundRoom.category || '',
+          capacity: foundRoom.capacity || 1,
+          price: foundRoom.price?.toString() || '',
+          size: foundRoom.size || '',
+          bedType: foundRoom.bedType || '',
+          status: foundRoom.status || 'disponible',
+          description: foundRoom.description || '',
+          amenities: foundRoom.amenities || [],
+          images: [],
+          existingImages: foundRoom.images || []
+        })
+        
+        console.log('💰 Prix chargé pour modification:', foundRoom.price, 'FCFA')
+      }
+    }
+
+    // Si les rooms ne sont pas chargées, les charger d'abord
+    if (rooms.length === 0) {
+      dispatch(fetchRooms()).then(() => {
+        loadRoom()
+      })
+    } else {
+      loadRoom()
+    }
+  }, [id, rooms, dispatch])
 
   const validateForm = () => {
     const requiredFields = ['name', 'number', 'type', 'category', 'capacity', 'price', 'bedType']
@@ -114,7 +154,7 @@ const AddRoom = () => {
     return true
   }
 
-  // ✅ FONCTION CORRIGÉE - SANS RÉDUCTION
+  // Fonction de mise à jour de la chambre
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -123,66 +163,69 @@ const AddRoom = () => {
     }
 
     setLoading(true)
-    const toastId = toast.loading('Création de la chambre en cours...')
+    const toastId = toast.loading('Modification de la chambre en cours...')
 
     try {
-      // ✅ CRÉER FORM DATA POUR L'ENVOI
       const submitFormData = new FormData()
       
       // Ajouter les champs texte
-      submitFormData.append('number', formData.number)
       submitFormData.append('name', formData.name)
+      submitFormData.append('number', formData.number)
       submitFormData.append('type', formData.type)
       submitFormData.append('category', formData.category)
       submitFormData.append('capacity', formData.capacity.toString())
-      
-      // ✅ PRIX EXACT SANS RÉDUCTION
       submitFormData.append('price', formData.price.toString())
-      
-      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
-      submitFormData.append('applyDiscount', 'false')
-      submitFormData.append('discountPercentage', '0')
-      submitFormData.append('originalPrice', formData.price.toString())
-      
       submitFormData.append('size', formData.size)
       submitFormData.append('bedType', formData.bedType)
       submitFormData.append('status', formData.status)
       submitFormData.append('description', formData.description)
+      
+      // ✅ DÉSACTIVER EXPLICITEMENT LES RÉDUCTIONS
+      submitFormData.append('applyDiscount', 'false')
+      submitFormData.append('discountPercentage', '0')
+      submitFormData.append('originalPrice', formData.price.toString())
+      submitFormData.append('forceExactPrice', 'true')
       
       // Ajouter les équipements
       formData.amenities.forEach(amenity => {
         submitFormData.append('amenities', amenity)
       })
 
-      // ✅ AJOUTER LES IMAGES DIRECTEMENT AU FORM DATA
+      // Ajouter les images existantes
+      formData.existingImages.forEach((image, index) => {
+        submitFormData.append('existingImages', image)
+      })
+
+      // Ajouter les nouvelles images
       formData.images.forEach((image, index) => {
         if (image.file) {
           submitFormData.append('images', image.file)
-          console.log(`📤 Image ${index + 1} ajoutée à FormData:`, image.name)
         }
       })
 
-      console.log('📤 FormData créé, envoi au backend...')
+      console.log('📤 Modification de la chambre:', formData.name)
       console.log('💰 Prix envoyé:', formData.price, 'FCFA (sans réduction)')
-      console.log('📁 Nombre d\'images:', formData.images.filter(img => img.file).length)
+      console.log('📁 Images existantes:', formData.existingImages.length)
+      console.log('📁 Nouvelles images:', formData.images.length)
 
-      // ✅ APPEL DIRECT AU SERVICE AVEC FORM DATA
-      const result = await roomService.createRoom(submitFormData)
+      // Appel au service de mise à jour
+      const result = await dispatch(updateRoom({ id, roomData: submitFormData })).unwrap()
       
       toast.dismiss(toastId)
-      toast.success(`Chambre "${formData.name}" créée avec succès !`)
+      toast.success(`Chambre "${formData.name}" modifiée avec succès !`)
       
-      console.log('✅ Réponse backend - Chambre créée:', result.data)
+      console.log('✅ Réponse backend - Chambre modifiée:', result)
 
-      // Vérifier le prix dans la réponse
-      if (result.data && result.data.chambre) {
-        const createdPrice = result.data.chambre.price
+      // Vérifier le prix final
+      if (result.chambre) {
+        const finalPrice = result.chambre.price
         const enteredPrice = parseFloat(formData.price)
         
-        if (createdPrice !== enteredPrice) {
-          console.warn(`⚠️ Attention: Prix créé (${createdPrice}) différent du prix entré (${enteredPrice})`)
+        if (finalPrice !== enteredPrice) {
+          console.warn(`⚠️ Attention: Prix final (${finalPrice}) différent du prix entré (${enteredPrice})`)
+          toast.warning('Le prix a été modifié par le système. Vérifiez la configuration des réductions.')
         } else {
-          console.log('✅ Prix conservé correctement:', createdPrice, 'FCFA')
+          console.log('✅ Prix conservé correctement:', finalPrice, 'FCFA')
         }
       }
 
@@ -201,7 +244,7 @@ const AddRoom = () => {
     } catch (error) {
       toast.dismiss(toastId)
       
-      console.error('💥 Erreur détaillée:', {
+      console.error('💥 Erreur modification chambre:', {
         message: error.message,
         response: error.response?.data,
         stack: error.stack
@@ -219,14 +262,14 @@ const AddRoom = () => {
       } else if (errorMessage.includes('400')) {
         toast.error('Données invalides, vérifiez les champs')
       } else {
-        toast.error(`Erreur lors de la création: ${errorMessage}`)
+        toast.error(`Erreur lors de la modification: ${errorMessage}`)
       }
     } finally {
       setLoading(false)
     }
   }
 
-  // Autres fonctions (inchangées)
+  // Gestion des équipements
   const handleAmenityToggle = (amenityId) => {
     setFormData(prev => ({
       ...prev,
@@ -236,6 +279,7 @@ const AddRoom = () => {
     }))
   }
 
+  // Gestion des nouvelles images
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files)
     
@@ -264,10 +308,11 @@ const AddRoom = () => {
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
       url: URL.createObjectURL(file),
-      alt: `${formData.name || 'Chambre'} - Image ${formData.images.length + index + 1}`,
+      alt: `${formData.name || 'Chambre'} - Nouvelle image ${formData.images.length + index + 1}`,
       file: file,
-      isPrimary: formData.images.length === 0 && index === 0,
-      order: formData.images.length + index
+      isPrimary: formData.images.length === 0 && formData.existingImages.length === 0 && index === 0,
+      order: formData.images.length + index,
+      isNew: true
     }))
     
     setFormData(prev => ({
@@ -275,14 +320,24 @@ const AddRoom = () => {
       images: [...prev.images, ...newImages]
     }))
 
-    toast.success(`${validFiles.length} image(s) ajoutée(s) avec succès`)
+    toast.success(`${validFiles.length} nouvelle(s) image(s) ajoutée(s)`)
 
     if (validFiles.length < files.length) {
       toast.warning(`${files.length - validFiles.length} fichier(s) invalide(s) ignoré(s)`)
     }
   }
 
-  const removeImage = (imageId) => {
+  // Supprimer une image existante
+  const removeExistingImage = (imageUrl) => {
+    setFormData(prev => ({
+      ...prev,
+      existingImages: prev.existingImages.filter(img => img !== imageUrl)
+    }))
+    toast.success('Image existante supprimée')
+  }
+
+  // Supprimer une nouvelle image
+  const removeNewImage = (imageId) => {
     setFormData(prev => {
       const imageToRemove = prev.images.find(img => img.id === imageId)
       if (imageToRemove?.url?.startsWith('blob:')) {
@@ -291,27 +346,30 @@ const AddRoom = () => {
       
       const newImages = prev.images.filter(img => img.id !== imageId)
       
-      if (imageToRemove?.isPrimary && newImages.length > 0) {
-        newImages[0].isPrimary = true
-      }
-      
       return {
         ...prev,
         images: newImages
       }
     })
-    toast.success('Image supprimée')
+    toast.success('Nouvelle image supprimée')
   }
 
-  const setPrimaryImage = (imageId) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.map(img => ({
-        ...img,
-        isPrimary: img.id === imageId
+  // Définir l'image principale
+  const setPrimaryImage = (imageType, imageId) => {
+    if (imageType === 'existing') {
+      // Pour les images existantes, on ne peut que marquer laquelle est principale
+      // La logique réelle dépendra de votre backend
+      toast.info('Image principale définie parmi les images existantes')
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        images: prev.images.map(img => ({
+          ...img,
+          isPrimary: img.id === imageId
+        }))
       }))
-    }))
-    toast.success('Image principale définie')
+      toast.success('Nouvelle image principale définie')
+    }
   }
 
   const handleInputChange = (field, value) => {
@@ -322,64 +380,37 @@ const AddRoom = () => {
   }
 
   const handleNumberChange = (field, value) => {
-    // Validation pour le prix - accepter uniquement des nombres positifs
-    if (field === 'price') {
-      const numericValue = value === '' ? '' : parseFloat(value)
-      if (value === '' || (!isNaN(numericValue) && numericValue >= 0)) {
-        setFormData(prev => ({
-          ...prev,
-          [field]: value
-        }))
-      }
-    } else {
-      const numericValue = value === '' ? '' : parseFloat(value)
-      if (value === '' || (!isNaN(numericValue) && numericValue >= 0)) {
-        setFormData(prev => ({
-          ...prev,
-          [field]: value
-        }))
-      }
+    const numericValue = value === '' ? '' : parseFloat(value)
+    if (value === '' || (!isNaN(numericValue) && numericValue >= 0)) {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }))
     }
-  }
-
-  const handleResetForm = () => {
-    formData.images.forEach(img => {
-      if (img.url?.startsWith('blob:')) {
-        URL.revokeObjectURL(img.url)
-      }
-    })
-
-    setFormData({
-      name: '',
-      number: '',
-      type: '',
-      category: '',
-      capacity: 1,
-      price: '',
-      size: '',
-      bedType: '',
-      status: 'disponible',
-      description: '',
-      amenities: [],
-      images: []
-    })
-    toast.success('Formulaire réinitialisé')
   }
 
   const handleCancel = () => {
+    // Nettoyer les URLs blob temporaires
     formData.images.forEach(img => {
       if (img.url?.startsWith('blob:')) {
         URL.revokeObjectURL(img.url)
       }
     })
 
-    if (formData.name || formData.number || formData.images.length > 0) {
-      if (window.confirm('Voulez-vous vraiment annuler ? Les modifications non enregistrées seront perdues.')) {
-        navigate('/dashboard/rooms')
-      }
-    } else {
+    if (window.confirm('Voulez-vous vraiment annuler ? Les modifications non enregistrées seront perdues.')) {
       navigate('/dashboard/rooms')
     }
+  }
+
+  if (!room) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement de la chambre...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -394,8 +425,8 @@ const AddRoom = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Ajouter une Chambre</h1>
-            <p className="text-gray-600">Créez une nouvelle chambre dans le système</p>
+            <h1 className="text-3xl font-bold text-gray-900">Modifier la Chambre</h1>
+            <p className="text-gray-600">Modifiez les informations de {room.name}</p>
           </div>
         </div>
         <button 
@@ -404,7 +435,7 @@ const AddRoom = () => {
           className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Save className="w-4 h-4" />
-          <span>{loading ? 'Création...' : 'Créer la Chambre'}</span>
+          <span>{loading ? 'Modification...' : 'Modifier la Chambre'}</span>
         </button>
       </div>
 
@@ -556,16 +587,47 @@ const AddRoom = () => {
           {/* Images */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold mb-4">
-              Images de la Chambre 
+              Images de la Chambre
               <span className="text-sm font-normal text-gray-500 ml-2">
-                ({formData.images.length} image(s))
+                ({formData.existingImages.length + formData.images.length} image(s))
               </span>
             </h2>
             
-            {/* Zone d'upload */}
+            {/* Images existantes */}
+            {formData.existingImages.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-3 text-gray-700">Images existantes</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {formData.existingImages.map((image, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={image}
+                        alt={`${formData.name} - Image ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                      <div className="absolute top-2 right-2">
+                        <button
+                          type="button"
+                          onClick={() => removeExistingImage(image)}
+                          className="bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Supprimer l'image"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 text-xs rounded">
+                        Existante {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Zone d'upload pour nouvelles images */}
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-4">
               <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-2">Glissez-déposez vos images ici ou</p>
+              <p className="text-gray-600 mb-2">Ajouter de nouvelles images</p>
               <input
                 type="file"
                 multiple
@@ -581,58 +643,53 @@ const AddRoom = () => {
                 Parcourir les fichiers
               </label>
               <p className="text-xs text-gray-500 mt-2">PNG, JPG, JPEG jusqu'à 10MB</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {formData.images.length === 0 && "Aucune image ? Des images par défaut seront générées automatiquement."}
-              </p>
             </div>
 
-            {/* Aperçu des images */}
+            {/* Aperçu des nouvelles images */}
             {formData.images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {formData.images.map((image, index) => (
-                  <div key={image.id} className="relative group">
-                    <img
-                      src={image.url}
-                      alt={image.alt}
-                      className="w-full h-32 object-cover rounded-lg"
-                    />
-                    {image.isPrimary && (
-                      <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
-                        Principale
-                      </div>
-                    )}
-                    <div className="absolute top-2 right-2 flex space-x-1">
-                      {!image.isPrimary && (
+              <div>
+                <h3 className="text-lg font-medium mb-3 text-gray-700">Nouvelles images</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {formData.images.map((image, index) => (
+                    <div key={image.id} className="relative group">
+                      <img
+                        src={image.url}
+                        alt={image.alt}
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                      {image.isPrimary && (
+                        <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
+                          Principale
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2 flex space-x-1">
+                        {!image.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimaryImage('new', image.id)}
+                            className="bg-blue-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Définir comme image principale"
+                          >
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => setPrimaryImage(image.id)}
-                          className="bg-blue-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Définir comme image principale"
+                          onClick={() => removeNewImage(image.id)}
+                          className="bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Supprimer l'image"
                         >
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                          </svg>
+                          <Trash2 className="w-3 h-3" />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(image.id)}
-                        className="bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Supprimer l'image"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 text-xs rounded">
-                      {index + 1}
-                    </div>
-                    {image.file && (
-                      <div className="absolute bottom-2 right-2 bg-blue-500 text-white px-2 py-1 text-xs rounded">
-                        📤 À uploader
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 text-xs rounded">
+                        Nouvelle {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -716,7 +773,11 @@ const AddRoom = () => {
             <h3 className="font-semibold mb-3 text-blue-900">Aperçu Rapide</h3>
             <div className="space-y-2 text-sm text-blue-800">
               <div className="flex justify-between">
-                <span>Images:</span>
+                <span>Images existantes:</span>
+                <span className="font-semibold">{formData.existingImages.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Nouvelles images:</span>
                 <span className="font-semibold">{formData.images.length}</span>
               </div>
               <div className="flex justify-between">
@@ -747,13 +808,6 @@ const AddRoom = () => {
               >
                 Annuler
               </button>
-              <button 
-                type="button"
-                onClick={handleResetForm}
-                className="w-full bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition-colors"
-              >
-                Tout effacer
-              </button>
             </div>
           </div>
         </div>
@@ -762,4 +816,4 @@ const AddRoom = () => {
   )
 }
 
-export default AddRoom
+export default EditRoom

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Edit, Calendar, Users, Euro, Bed, Ruler } from 'lucide-react'
+import { ArrowLeft, Edit, Calendar, Users, Bed, Ruler } from 'lucide-react'
 import { useAppSelector } from '../../hooks'
 import ImageSlider from '../components/ImageSlider'
 
@@ -18,6 +18,11 @@ const RoomDetails = () => {
     }
     setLoading(false)
   }, [id, rooms])
+
+  // Formatage montant F CFA
+  const formatAmountCFA = (amount) => {
+    return `${parseFloat(amount).toLocaleString('fr-FR')} FCFA`;
+  };
 
   if (loading) {
     return (
@@ -77,7 +82,10 @@ const RoomDetails = () => {
             <p className="text-gray-600">#{room.number} • {room.type}</p>
           </div>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors">
+        <button 
+          onClick={() => navigate(`/dashboard/room/${room._id}/edit`)} // ✅ CORRECTION DU LIEN
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors"
+        >
           <Edit className="w-4 h-4" />
           <span>Modifier</span>
         </button>
@@ -122,7 +130,7 @@ const RoomDetails = () => {
                 </span>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-blue-600">€{room.price}</div>
+                <div className="text-2xl font-bold text-blue-600">{formatAmountCFA(room.price)}</div>
                 <div className="text-sm text-gray-500">par nuit</div>
               </div>
             </div>

@@ -12,9 +12,12 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
+import userService from '../../services/userService'
 
 const AddUser = () => {
   const navigate = useNavigate()
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -60,21 +63,112 @@ const AddUser = () => {
     { id: 'gestion_restaurant', label: 'Gestion restaurant' }
   ]
 
+  // ✅ FONCTION DE VALIDATION AMÉLIORÉE
+  const validateForm = () => {
+    const requiredFields = ['firstName', 'lastName', 'email', 'password', 'department', 'role']
+    const missingFields = requiredFields.filter(field => !formData[field])
+    
+    if (missingFields.length > 0) {
+      toast.error('Veuillez remplir tous les champs obligatoires')
+      return false
+    }
+
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Veuillez entrer une adresse email valide')
+      return false
+    }
+
+    // Validation mot de passe
+    if (formData.password.length < 8) {
+      toast.error('Le mot de passe doit contenir au moins 8 caractères')
+      return false
+    }
+
+    return true
+  }
+
+  // ✅ FONCTION DE SOUMISSION CORRIGÉE
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     setLoading(true)
+    const toastId = toast.loading('Création de l\'utilisateur en cours...')
 
     try {
-      // Simulation de sauvegarde
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // ✅ PRÉPARATION DES DONNÉES POUR L'API
+      const userData = {
+        name: formData.firstName,
+        surname: formData.lastName,
+        email: formData.email,
+        phone: formData.phone || '',
+        department: formData.department,
+        role: formData.role,
+        hireDate: formData.hireDate || new Date().toISOString(),
+        password: formData.password,
+        status: formData.status,
+        permissions: formData.permissions
+      }
+
+      console.log('📤 [ADD USER] Données utilisateur envoyées:', userData)
+
+      // ✅ APPEL RÉEL AU SERVICE
+      const response = await userService.createUser(userData)
       
-      // En production, envoyer les données à l'API
-      console.log('Données utilisateur:', formData)
+      toast.dismiss(toastId)
       
-      // Redirection après succès
-      navigate('/dashboard/users?message=user_created')
+      // ✅ GESTION DE LA RÉPONSE
+      if (response.data) {
+        toast.success(`Utilisateur "${formData.firstName} ${formData.lastName}" créé avec succès !`)
+        console.log('✅ [ADD USER] Utilisateur créé:', response.data)
+        
+        // Redirection après succès
+        setTimeout(() => {
+          navigate('/dashboard/users')
+        }, 1500)
+      } else {
+        throw new Error('Réponse vide du serveur')
+      }
+
     } catch (error) {
-      console.error('Erreur lors de la création:', error)
+      toast.dismiss(toastId)
+      
+      console.error('💥 [ADD USER] Erreur création utilisateur:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack
+      })
+      
+      // ✅ GESTION D'ERREURS AMÉLIORÉE
+      let errorMessage = 'Erreur inconnue lors de la création'
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      // Messages d'erreur spécifiques
+      if (errorMessage.toLowerCase().includes('email') && errorMessage.toLowerCase().includes('existe')) {
+        toast.error(`L'adresse email "${formData.email}" est déjà utilisée`)
+      } else if (error.response?.status === 401) {
+        toast.error('Session expirée, veuillez vous reconnecter')
+        setTimeout(() => navigate('/login'), 2000)
+      } else if (error.response?.status === 403) {
+        toast.error('Accès refusé - Droits administrateur requis')
+      } else if (error.response?.status === 400) {
+        toast.error('Données invalides, vérifiez les champs')
+      } else if (error.response?.status === 500) {
+        toast.error('Erreur serveur, veuillez réessayer plus tard')
+      } else {
+        toast.error(`Erreur lors de la création: ${errorMessage}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -103,6 +197,17 @@ const AddUser = () => {
       password += chars.charAt(Math.floor(Math.random() * chars.length))
     }
     setFormData(prev => ({ ...prev, password }))
+    toast.success('Mot de passe généré avec succès')
+  }
+
+  const handleCancel = () => {
+    if (formData.firstName || formData.lastName || formData.email) {
+      if (window.confirm('Voulez-vous vraiment annuler ? Les modifications non enregistrées seront perdues.')) {
+        navigate('/dashboard/users')
+      }
+    } else {
+      navigate('/dashboard/users')
+    }
   }
 
   return (
@@ -111,7 +216,7 @@ const AddUser = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button 
-            onClick={() => navigate('/dashboard/users')}
+            onClick={handleCancel}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -124,7 +229,7 @@ const AddUser = () => {
         <button 
           onClick={handleSubmit}
           disabled={loading}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Save className="w-4 h-4" />
           <span>{loading ? 'Création...' : 'Créer l\'Utilisateur'}</span>
@@ -296,6 +401,7 @@ const AddUser = () => {
                       onChange={(e) => handleInputChange('password', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
                       placeholder="Mot de passe sécurisé"
+                      minLength="8"
                     />
                     <button
                       type="button"
@@ -417,7 +523,7 @@ const AddUser = () => {
             <div className="space-y-2">
               <button 
                 type="button"
-                onClick={() => navigate('/dashboard/users')}
+                onClick={handleCancel}
                 className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Annuler

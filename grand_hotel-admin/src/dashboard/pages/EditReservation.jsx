@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Calendar, User, Bed, Mail, Phone, Euro, Users, FileText } from 'lucide-react'
+import { ArrowLeft, Save, Calendar, User, Bed, Mail, Phone, Users, FileText } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 import reservationService from '../../services/reservationService'
 import roomService from '../../services/roomService'
@@ -15,16 +15,9 @@ const EditReservation = () => {
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
-  // Fonction de conversion Euro → F CFA
-  const convertToCFA = (amountInEuro) => {
-    const exchangeRate = 655.957;
-    return Math.round(amountInEuro * exchangeRate);
-  };
-
   // Formatage montant F CFA
-  const formatAmountCFA = (amountInEuro) => {
-    const amountInCFA = convertToCFA(amountInEuro);
-    return `${amountInCFA.toLocaleString('fr-FR')} FCFA`;
+  const formatAmountCFA = (amount) => {
+    return `${parseFloat(amount).toLocaleString('fr-FR')} FCFA`;
   };
 
   // Charger la réservation et les chambres
@@ -250,7 +243,7 @@ const EditReservation = () => {
               {formatAmountCFA(reservation.totalAmount)}
             </div>
             <div className="text-sm text-gray-500">
-              {reservation.totalAmount} € • {reservation.nights} nuit(s)
+              {reservation.nights} nuit(s)
             </div>
           </div>
         </div>
@@ -458,7 +451,7 @@ const EditReservation = () => {
         {/* Informations paiement */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-            <Euro className="w-5 h-5 text-green-600" />
+            <span className="text-green-600 mr-2">FCFA</span>
             <span>Paiement</span>
           </h2>
           <div className="space-y-4">
@@ -468,9 +461,6 @@ const EditReservation = () => {
               </label>
               <div className="text-2xl font-bold text-gray-900">
                 {formatAmountCFA(reservation.totalAmount)}
-              </div>
-              <div className="text-sm text-gray-600">
-                Soit {reservation.totalAmount} €
               </div>
             </div>
             

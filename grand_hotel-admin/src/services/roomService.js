@@ -23,10 +23,15 @@ api.interceptors.request.use(
 );
 
 const roomService = {
-  // ✅ CRÉATION AVEC FORM DATA
+  // ✅ CRÉATION AVEC FORM DATA - SANS RÉDUCTION
   async createRoom(formData) {
     try {
       console.log('📤 Envoi FormData au backend...');
+      
+      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
+      formData.append('applyDiscount', 'false');
+      formData.append('discountPercentage', '0');
+      
       const response = await api.post('/chambres', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -58,11 +63,24 @@ const roomService = {
     }
   },
 
-  async updateRoom(id, roomData) {
+  // ✅ MISE À JOUR AVEC FORM DATA - SANS RÉDUCTION
+  async updateRoom(id, formData) {
     try {
-      const response = await api.put(`/chambres/${id}`, roomData);
+      console.log('📤 Envoi FormData pour modification...');
+      
+      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
+      formData.append('applyDiscount', 'false');
+      formData.append('discountPercentage', '0');
+      
+      const response = await api.put(`/chambres/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('✅ Réponse modification chambre:', response.data);
       return response;
     } catch (error) {
+      console.error('❌ Erreur modification chambre:', error.response?.data || error.message);
       throw error;
     }
   },
@@ -135,17 +153,50 @@ const roomService = {
     }));
   },
 
-  // ✅ FORMATER LE PRIX EN XAF
+  // ✅ FORMATER LE PRIX EN XAF - CORRECTION DU FORMATAGE
   formatPrice(price) {
+    if (!price && price !== 0) return '0 FCFA';
+    
+    const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+    
     return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'XAF'
-    }).format(price);
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(numericPrice) + ' FCFA';
   },
 
   // ✅ AFFICHER LE SYMBOLE XAF
   getCurrencySymbol() {
     return 'FCFA';
+  },
+
+  // ✅ FONCTION POUR APPLIQUER LE PRIX EXACT SANS RÉDUCTION
+  applyExactPrice(price) {
+    return {
+      originalPrice: price,
+      discountedPrice: price,
+      discountPercentage: 0,
+      hasDiscount: false
+    };
+  },
+
+  // ✅ VALIDER ET CORRIGER LE PRIX (AU CAS OÙ LE BACKEND APPLIQUE DES RÉDUCTIONS)
+  validatePrice(roomData) {
+    const price = parseFloat(roomData.price);
+    
+    // Si le prix a été modifié par une réduction, le corriger
+    if (roomData.discountedPrice && roomData.discountedPrice !== price) {
+      console.warn('⚠️ Prix corrigé - suppression de la réduction automatique');
+      return {
+        ...roomData,
+        price: price,
+        discountedPrice: price,
+        discountPercentage: 0,
+        hasDiscount: false
+      };
+    }
+    
+    return roomData;
   }
 };
 

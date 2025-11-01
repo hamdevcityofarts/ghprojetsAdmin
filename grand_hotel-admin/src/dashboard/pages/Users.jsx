@@ -241,7 +241,7 @@ const Users = () => {
             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <div className="flex space-x-3">
                 <Link
-                  to={`/dashboard/user/${user._id}`}
+                  to={`/dashboard/users/${user.id}`}
                   className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
                   title="Voir détails"
                 >
@@ -249,7 +249,7 @@ const Users = () => {
                   <span>Voir</span>
                 </Link>
                 <Link
-                  to={`/dashboard/user/${user._id}/edit`}
+                  to={`/dashboard/users/${user.id}/edit`} 
                   className="text-green-600 hover:text-green-900 flex items-center space-x-1"
                   title="Modifier"
                 >

@@ -23,10 +23,9 @@ import AddRoom from "./dashboard/pages/AddRoom";
 import AddReservation from "./dashboard/pages/AddReservation";
 import Login from "./dashboard/pages/Login";
 import SignUp from "./dashboard/pages/SignUp";
+import EditRoom from "./dashboard/pages/EditRooms"; // ✅ AJOUT IMPORT
 
 // Initialisation Auth
-// 🔹 Initialisation Auth améliorée
-// 🔹 Initialisation Auth améliorée
 const AuthInitializer = ({ children }) => {
   const dispatch = useDispatch();
   const { token, isAuthenticated, isInitializing } = useSelector((state) => state.auth);
@@ -42,7 +41,7 @@ const AuthInitializer = ({ children }) => {
           dispatch(initializationComplete());
         }
       } else {
-        // ✅ Si aucun token, ou déjà connecté → on termine l’initialisation
+        // ✅ Si aucun token, ou déjà connecté → on termine l'initialisation
         dispatch(initializationComplete());
       }
     };
@@ -50,7 +49,7 @@ const AuthInitializer = ({ children }) => {
     initialize();
   }, [dispatch, token]);
 
-  // ✅ N’affiche le loader que pendant l’initialisation réelle
+  // ✅ N'affiche le loader que pendant l'initialisation réelle
   if (isInitializing) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -61,8 +60,6 @@ const AuthInitializer = ({ children }) => {
 
   return children;
 };
-
-
 
 // Route protégée
 const ProtectedRoute = ({ children }) => {
@@ -138,10 +135,12 @@ function AppContent() {
           <Route path="add-room" element={<AddRoom />} />
           <Route path="add-reservation" element={<AddReservation />} />
           <Route path="room/:id" element={<RoomDetails />} />
+          <Route path="room/:id/edit" element={<EditRoom />} /> {/* ✅ AJOUT ROUTE EDIT ROOM */}
           <Route path="reservation/:id/edit" element={<EditReservation />} />
           <Route path="client/:id" element={<ClientDetails />} />
           <Route path="payment/:id" element={<PaymentDetails />} />
           <Route path="user/:id" element={<UserDetails />} />
+           <Route path="user/:id/edit" element={<UserDetails />} />
         </Route>
 
         {/* Fallback */}
