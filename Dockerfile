@@ -20,6 +20,8 @@ RUN npm run build
 # NGINX est léger et optimisé pour servir des fichiers statiques
 FROM nginx:alpine
 
+
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Copier les fichiers de construction (les assets statiques) depuis l'étape 'build'
 # Le dossier de sortie est généralement 'dist' pour Vite ou 'build' pour CRA
 COPY --from=build /app/dist /usr/share/nginx/html
