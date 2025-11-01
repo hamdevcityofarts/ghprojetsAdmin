@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // URL de base pour l'API
-const API_URL = process.env.BASE_API_URL;
+const API_URL = process.env.VITE_BASE_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,
