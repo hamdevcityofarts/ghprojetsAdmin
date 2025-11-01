@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import reservationService from '../../services/reservationService';
 
-const API_URL = process.env.VITE_BASE_API_URL;
+const API_URL = import.meta.env.VITE_BASE_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,
