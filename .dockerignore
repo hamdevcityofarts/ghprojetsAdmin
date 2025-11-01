@@ -1,0 +1,11 @@
+# Dépendances locales
+node_modules
+# Fichiers de débogage et de log
+npm-debug.log
+.DS_Store
+# Git
+.git
+.gitignore
+# Dossier de build (sera créé dans le conteneur par l'étape 'build')
+dist
+build
