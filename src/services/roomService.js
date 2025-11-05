@@ -4,7 +4,7 @@ const API_URL = import.meta.env.VITE_BASE_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 120000,
 });
 
 // Intercepteur pour l'authentification
@@ -14,7 +14,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
   (error) => {
@@ -23,20 +22,17 @@ api.interceptors.request.use(
 );
 
 const roomService = {
-  // ✅ CRÉATION AVEC FORM DATA - SANS RÉDUCTION
-  async createRoom(formData) {
+  // ✅ NOUVELLE MÉTHODE : Création avec URLs Cloudinary
+  async createRoom(roomData) {
     try {
-      console.log('📤 Envoi FormData au backend...');
+      console.log('📤 Envoi données chambre (URLs Cloudinary):', roomData);
       
-      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
-      formData.append('applyDiscount', 'false');
-      formData.append('discountPercentage', '0');
-      
-      const response = await api.post('/chambres', formData, {
+      const response = await api.post('/chambres', roomData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json', // ✅ Plus multipart/form-data
         },
       });
+      
       console.log('✅ Réponse création chambre:', response.data);
       return response;
     } catch (error) {
@@ -45,6 +41,26 @@ const roomService = {
     }
   },
 
+  // ✅ NOUVELLE MÉTHODE : Mise à jour avec URLs Cloudinary
+  async updateRoom(id, roomData) {
+    try {
+      console.log('📤 Envoi données modification (URLs Cloudinary):', roomData);
+      
+      const response = await api.put(`/chambres/${id}`, roomData, {
+        headers: {
+          'Content-Type': 'application/json', // ✅ Plus multipart/form-data
+        },
+      });
+      
+      console.log('✅ Réponse modification chambre:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur modification chambre:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  // ✅ CONSERVER LES AUTRES MÉTHODES (inchangées)
   async getAllRooms() {
     try {
       const response = await api.get('/chambres');
@@ -63,28 +79,6 @@ const roomService = {
     }
   },
 
-  // ✅ MISE À JOUR AVEC FORM DATA - SANS RÉDUCTION
-  async updateRoom(id, formData) {
-    try {
-      console.log('📤 Envoi FormData pour modification...');
-      
-      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
-      formData.append('applyDiscount', 'false');
-      formData.append('discountPercentage', '0');
-      
-      const response = await api.put(`/chambres/${id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      console.log('✅ Réponse modification chambre:', response.data);
-      return response;
-    } catch (error) {
-      console.error('❌ Erreur modification chambre:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
   async deleteRoom(id) {
     try {
       const response = await api.delete(`/chambres/${id}`);
@@ -94,43 +88,11 @@ const roomService = {
     }
   },
 
-  // Upload séparé (pour autres usages)
-  async uploadRoomImage(formData) {
-    try {
-      const response = await api.post('/chambres/upload/image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
+  // ❌ SUPPRIMER les méthodes d'upload (déplacées vers cloudinaryService)
+  // async uploadRoomImage() {...}
+  // async uploadMultipleRoomImages() {...}
+  // async deleteRoomImage() {...}
 
-  async uploadMultipleRoomImages(formData) {
-    try {
-      const response = await api.post('/chambres/upload/images', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  async deleteRoomImage(filename) {
-    try {
-      const response = await api.delete(`/chambres/images/${filename}`);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  // Images par défaut
   generateDefaultImages(roomType, roomName) {
     const imageCollections = {
       standard: ['1566664482983-ccf19b83f6c0', '1586023493607-b0a0e59cb41e'],
@@ -153,7 +115,6 @@ const roomService = {
     }));
   },
 
-  // ✅ FORMATER LE PRIX EN XAF - CORRECTION DU FORMATAGE
   formatPrice(price) {
     if (!price && price !== 0) return '0 FCFA';
     
@@ -165,12 +126,10 @@ const roomService = {
     }).format(numericPrice) + ' FCFA';
   },
 
-  // ✅ AFFICHER LE SYMBOLE XAF
   getCurrencySymbol() {
     return 'FCFA';
   },
 
-  // ✅ FONCTION POUR APPLIQUER LE PRIX EXACT SANS RÉDUCTION
   applyExactPrice(price) {
     return {
       originalPrice: price,
@@ -180,11 +139,9 @@ const roomService = {
     };
   },
 
-  // ✅ VALIDER ET CORRIGER LE PRIX (AU CAS OÙ LE BACKEND APPLIQUE DES RÉDUCTIONS)
   validatePrice(roomData) {
     const price = parseFloat(roomData.price);
     
-    // Si le prix a été modifié par une réduction, le corriger
     if (roomData.discountedPrice && roomData.discountedPrice !== price) {
       console.warn('⚠️ Prix corrigé - suppression de la réduction automatique');
       return {

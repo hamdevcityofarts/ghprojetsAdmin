@@ -15,6 +15,7 @@ import { useToast } from '../../context/ToastContext'
 import { useAppDispatch } from '../../hooks'
 import { createRoom } from '../../store/slices/roomsSlice'
 import roomService from '../../services/roomService'
+import cloudinaryService from '../../services/cloudinaryService' // ✅ NOUVEAU IMPORT
 
 // CONSTANTES (inchangées)
 const roomTypes = [
@@ -75,6 +76,8 @@ const AddRoom = () => {
   const dispatch = useAppDispatch()
   const toast = useToast()
   const [loading, setLoading] = useState(false)
+  const [compressing, setCompressing] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     number: '',
@@ -89,6 +92,42 @@ const AddRoom = () => {
     amenities: [],
     images: []
   })
+
+  // ✅ FONCTION DE COMPRESSION D'IMAGES
+  const optimizeImage = async (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // ⭐ RÉDUIRE LA TAILLE (max 1200px de large)
+          const maxWidth = 1200;
+          const scale = Math.min(maxWidth / img.width, 1);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          
+          // ⭐ COMPRESSION à 75% de qualité
+          canvas.toBlob((blob) => {
+            const optimizedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            
+            console.log(`📊 Compression: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB (${Math.round((1 - blob.size / file.size) * 100)}% réduit)`);
+            
+            resolve(optimizedFile);
+          }, 'image/jpeg', 0.75); // 75% qualité
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
   const validateForm = () => {
     const requiredFields = ['name', 'number', 'type', 'category', 'capacity', 'price', 'bedType']
@@ -114,115 +153,99 @@ const AddRoom = () => {
     return true
   }
 
-  // ✅ FONCTION CORRIGÉE - SANS RÉDUCTION
+  // ✅ NOUVELLE FONCTION : Upload direct Cloudinary
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     
     if (!validateForm()) {
-      return
+      return;
     }
 
-    setLoading(true)
-    const toastId = toast.loading('Création de la chambre en cours...')
+    setLoading(true);
+    setUploading(true);
+    const toastId = toast.loading('Création de la chambre en cours...');
 
     try {
-      // ✅ CRÉER FORM DATA POUR L'ENVOI
-      const submitFormData = new FormData()
+      // ✅ ÉTAPE 1: UPLOAD DES IMAGES DIRECTEMENT VERS CLOUDINARY
+      let uploadedImages = [];
+      const imagesToUpload = formData.images.filter(img => img.file);
       
-      // Ajouter les champs texte
-      submitFormData.append('number', formData.number)
-      submitFormData.append('name', formData.name)
-      submitFormData.append('type', formData.type)
-      submitFormData.append('category', formData.category)
-      submitFormData.append('capacity', formData.capacity.toString())
-      
-      // ✅ PRIX EXACT SANS RÉDUCTION
-      submitFormData.append('price', formData.price.toString())
-      
-      // ✅ AJOUTER LES CHAMPS POUR DÉSACTIVER LES RÉDUCTIONS
-      submitFormData.append('applyDiscount', 'false')
-      submitFormData.append('discountPercentage', '0')
-      submitFormData.append('originalPrice', formData.price.toString())
-      
-      submitFormData.append('size', formData.size)
-      submitFormData.append('bedType', formData.bedType)
-      submitFormData.append('status', formData.status)
-      submitFormData.append('description', formData.description)
-      
-      // Ajouter les équipements
-      formData.amenities.forEach(amenity => {
-        submitFormData.append('amenities', amenity)
-      })
-
-      // ✅ AJOUTER LES IMAGES DIRECTEMENT AU FORM DATA
-      formData.images.forEach((image, index) => {
-        if (image.file) {
-          submitFormData.append('images', image.file)
-          console.log(`📤 Image ${index + 1} ajoutée à FormData:`, image.name)
-        }
-      })
-
-      console.log('📤 FormData créé, envoi au backend...')
-      console.log('💰 Prix envoyé:', formData.price, 'FCFA (sans réduction)')
-      console.log('📁 Nombre d\'images:', formData.images.filter(img => img.file).length)
-
-      // ✅ APPEL DIRECT AU SERVICE AVEC FORM DATA
-      const result = await roomService.createRoom(submitFormData)
-      
-      toast.dismiss(toastId)
-      toast.success(`Chambre "${formData.name}" créée avec succès !`)
-      
-      console.log('✅ Réponse backend - Chambre créée:', result.data)
-
-      // Vérifier le prix dans la réponse
-      if (result.data && result.data.chambre) {
-        const createdPrice = result.data.chambre.price
-        const enteredPrice = parseFloat(formData.price)
+      if (imagesToUpload.length > 0) {
+        toast.loading(`Upload de ${imagesToUpload.length} image(s) vers Cloudinary...`);
         
-        if (createdPrice !== enteredPrice) {
-          console.warn(`⚠️ Attention: Prix créé (${createdPrice}) différent du prix entré (${enteredPrice})`)
-        } else {
-          console.log('✅ Prix conservé correctement:', createdPrice, 'FCFA')
-        }
+        // Upload vers Cloudinary
+        const uploadResults = await cloudinaryService.uploadMultipleImages(
+          imagesToUpload.map(img => img.file)
+        );
+        
+        // Transformer les résultats en format d'images
+        uploadedImages = uploadResults.map((result, index) => ({
+          url: result.url,
+          cloudinaryId: result.cloudinaryId,
+          alt: `${formData.name || 'Chambre'} - Image ${index + 1}`,
+          isPrimary: index === 0,
+          order: index
+        }));
+        
+        console.log('✅ Images uploadées sur Cloudinary:', uploadedImages);
+        toast.success(`${uploadedImages.length} image(s) uploadée(s) avec succès`);
       }
+
+      // ✅ ÉTAPE 2: PRÉPARER LES DONNÉES SANS FILES
+      const roomData = {
+        number: formData.number,
+        name: formData.name,
+        type: formData.type,
+        category: formData.category,
+        capacity: parseInt(formData.capacity),
+        price: parseFloat(formData.price),
+        size: formData.size,
+        bedType: formData.bedType,
+        status: formData.status,
+        description: formData.description,
+        amenities: formData.amenities,
+        images: uploadedImages, // ✅ URLs Cloudinary directement
+        applyDiscount: false,
+        discountPercentage: 0,
+        originalPrice: parseFloat(formData.price)
+      };
+
+      console.log('📤 Envoi données chambre au backend:', roomData);
+
+      // ✅ ÉTAPE 3: ENVOYER AU BACKEND (SANS IMAGES)
+      const result = await roomService.createRoom(roomData);
+      
+      toast.dismiss(toastId);
+      toast.success(`Chambre "${formData.name}" créée avec succès !`);
+      
+      console.log('✅ Réponse backend:', result.data);
 
       // Nettoyer les URLs blob temporaires
       formData.images.forEach(img => {
         if (img.url?.startsWith('blob:')) {
-          URL.revokeObjectURL(img.url)
+          URL.revokeObjectURL(img.url);
         }
-      })
+      });
 
-      // Redirection après succès
+      // Redirection
       setTimeout(() => {
-        navigate('/dashboard/rooms')
-      }, 1500)
+        navigate('/dashboard/rooms');
+      }, 1500);
 
     } catch (error) {
-      toast.dismiss(toastId)
+      toast.dismiss(toastId);
       
-      console.error('💥 Erreur détaillée:', {
-        message: error.message,
-        response: error.response?.data,
-        stack: error.stack
-      })
+      console.error('💥 Erreur détaillée:', error);
       
-      const errorMessage = error?.response?.data?.message || error?.message || 'Erreur inconnue'
-      
-      if (errorMessage.includes('numéro existe déjà')) {
-        toast.error(`Le numéro de chambre "${formData.number}" existe déjà`)
-      } else if (errorMessage.includes('Non autorisé') || errorMessage.includes('401')) {
-        toast.error('Session expirée, veuillez vous reconnecter')
-        setTimeout(() => navigate('/login'), 2000)
-      } else if (errorMessage.includes('403')) {
-        toast.error('Accès refusé - Droits administrateur requis')
-      } else if (errorMessage.includes('400')) {
-        toast.error('Données invalides, vérifiez les champs')
+      if (error.message.includes('Échec upload image')) {
+        toast.error('Erreur lors de l\'upload des images vers Cloudinary');
       } else {
-        toast.error(`Erreur lors de la création: ${errorMessage}`)
+        const errorMessage = error?.response?.data?.message || error?.message || 'Erreur inconnue';
+        toast.error(`Erreur lors de la création: ${errorMessage}`);
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
+      setUploading(false);
     }
   }
 
@@ -236,17 +259,18 @@ const AddRoom = () => {
     }))
   }
 
-  const handleImageUpload = (e) => {
+  // ✅ FONCTION UPLOAD AVEC COMPRESSION
+  const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files)
     
     if (files.length === 0) return
 
     const validFiles = files.filter(file => {
-      const isValidType = ['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)
-      const isValidSize = file.size <= 10 * 1024 * 1024
+      const isValidType = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)
+      const isValidSize = file.size <= 10 * 1024 * 1024 // 10MB max avant compression
       
       if (!isValidType) {
-        toast.error('Seuls les fichiers JPG, JPEG et PNG sont autorisés')
+        toast.error('Seuls les fichiers JPG, JPEG, PNG et WebP sont autorisés')
         return false
       }
       
@@ -260,25 +284,49 @@ const AddRoom = () => {
 
     if (validFiles.length === 0) return
 
-    const newImages = validFiles.map((file, index) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      url: URL.createObjectURL(file),
-      alt: `${formData.name || 'Chambre'} - Image ${formData.images.length + index + 1}`,
-      file: file,
-      isPrimary: formData.images.length === 0 && index === 0,
-      order: formData.images.length + index
-    }))
-    
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, ...newImages]
-    }))
+    setCompressing(true)
+    const compressToastId = toast.loading(`Compression de ${validFiles.length} image(s)...`)
 
-    toast.success(`${validFiles.length} image(s) ajoutée(s) avec succès`)
+    try {
+      // ⭐ COMPRESSER TOUTES LES IMAGES
+      const optimizedFiles = await Promise.all(
+        validFiles.map(file => optimizeImage(file))
+      )
 
-    if (validFiles.length < files.length) {
-      toast.warning(`${files.length - validFiles.length} fichier(s) invalide(s) ignoré(s)`)
+      const newImages = optimizedFiles.map((file, index) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        url: URL.createObjectURL(file),
+        alt: `${formData.name || 'Chambre'} - Image ${formData.images.length + index + 1}`,
+        file: file,
+        isPrimary: formData.images.length === 0 && index === 0,
+        order: formData.images.length + index,
+        compressed: true // Marquer comme compressé
+      }))
+      
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...newImages]
+      }))
+
+      toast.dismiss(compressToastId)
+      
+      // Calculer la réduction totale
+      const totalOriginalSize = validFiles.reduce((sum, file) => sum + file.size, 0)
+      const totalCompressedSize = optimizedFiles.reduce((sum, file) => sum + file.size, 0)
+      const reductionPercent = Math.round((1 - totalCompressedSize / totalOriginalSize) * 100)
+      
+      toast.success(`${validFiles.length} image(s) compressée(s) - ${reductionPercent}% économisé`)
+
+      if (validFiles.length < files.length) {
+        toast.warning(`${files.length - validFiles.length} fichier(s) invalide(s) ignoré(s)`)
+      }
+    } catch (error) {
+      toast.dismiss(compressToastId)
+      console.error('❌ Erreur compression:', error)
+      toast.error('Erreur lors de la compression des images')
+    } finally {
+      setCompressing(false)
     }
   }
 
@@ -400,11 +448,13 @@ const AddRoom = () => {
         </div>
         <button 
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={loading || uploading || compressing}
           className="bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Save className="w-4 h-4" />
-          <span>{loading ? 'Création...' : 'Créer la Chambre'}</span>
+          <span>
+            {compressing ? 'Compression...' : uploading ? 'Upload Cloudinary...' : loading ? 'Création...' : 'Créer la Chambre'}
+          </span>
         </button>
       </div>
 
@@ -555,7 +605,7 @@ const AddRoom = () => {
 
           {/* Images */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold mb-4">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
               Images de la Chambre 
               <span className="text-sm font-normal text-gray-500 ml-2">
                 ({formData.images.length} image(s))
@@ -573,14 +623,15 @@ const AddRoom = () => {
                 onChange={handleImageUpload}
                 className="hidden"
                 id="image-upload"
+                disabled={compressing}
               />
               <label 
                 htmlFor="image-upload"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 inline-block"
+                className={`bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 inline-block ${compressing ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Parcourir les fichiers
+                {compressing ? 'Compression en cours...' : 'Parcourir les fichiers'}
               </label>
-              <p className="text-xs text-gray-500 mt-2">PNG, JPG, JPEG jusqu'à 10MB</p>
+              <p className="text-xs text-gray-500 mt-2">PNG, JPG, JPEG, WebP jusqu'à 10MB - Compression automatique</p>
               <p className="text-xs text-gray-400 mt-1">
                 {formData.images.length === 0 && "Aucune image ? Des images par défaut seront générées automatiquement."}
               </p>
@@ -627,8 +678,8 @@ const AddRoom = () => {
                       {index + 1}
                     </div>
                     {image.file && (
-                      <div className="absolute bottom-2 right-2 bg-blue-500 text-white px-2 py-1 text-xs rounded">
-                        📤 À uploader
+                      <div className="absolute bottom-2 right-2 bg-green-500 text-white px-2 py-1 text-xs rounded">
+                        ✅ Optimisée
                       </div>
                     )}
                   </div>
